@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SIR Model Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            font-size: 12px;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        input {
+            width: 100%;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        canvas {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Agent-Based SIR Model Simulation</h1>
+    
+    
+    <div class="controls">
+        <div>
+            <div class="control-group">
+                <label for="populationSize">Population Size:</label>
+                <input type="range" id="populationSize" min="100" max="1000" value="500" step="50">
+                <span id="populationSizeValue">500</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="initialInfected">Initial Infected:</label>
+                <input type="range" id="initialInfected" min="1" max="50" value="5">
+                <span id="initialInfectedValue">5</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="infectionProb">Infection Probability:</label>
+                <input type="range" id="infectionProb" min="0" max="0.2" value="0.04" step="0.01">
+                <span id="infectionProbValue">0.04</span>
+            </div>
+        </div>
+        
+        <div>
+            <div class="control-group">
+                <label for="recoveryProb">Recovery Probability:</label>
+                <input type="range" id="recoveryProb" min="0" max="0.2" value="0.08" step="0.01">
+                <span id="recoveryProbValue">0.08</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="contactsPerStep">Contacts per Step:</label>
+                <input type="range" id="contactsPerStep" min="1" max="20" value="5">
+                <span id="contactsPerStepValue">5</span>
+            </div>
+            
+            <div class="control-group">
+                <label for="steps">Simulation Steps:</label>
+                <input type="range" id="steps" min="50" max="300" value="160">
+                <span id="stepsValue">160</span>
+            </div>
+        </div>
+    </div>
+    
+    <button id="runSimulation">Run Simulation</button>
+    
+    <canvas id="simulationChart"></canvas>
+    
+    <script>
+        // Update value displays when sliders change
+        document.getElementById('populationSize').addEventListener('input', function() {
+            document.getElementById('populationSizeValue').textContent = this.value;
+        });
+        
+        document.getElementById('initialInfected').addEventListener('input', function() {
+            document.getElementById('initialInfectedValue').textContent = this.value;
+        });
+        
+        document.getElementById('infectionProb').addEventListener('input', function() {
+            document.getElementById('infectionProbValue').textContent = this.value;
+        });
+        
+        document.getElementById('recoveryProb').addEventListener('input', function() {
+            document.getElementById('recoveryProbValue').textContent = this.value;
+        });
+        
+        document.getElementById('contactsPerStep').addEventListener('input', function() {
+            document.getElementById('contactsPerStepValue').textContent = this.value;
+        });
+        
+        document.getElementById('steps').addEventListener('input', function() {
+            document.getElementById('stepsValue').textContent = this.value;
+        });
+        
+        // Initialize chart
+        const ctx = document.getElementById('simulationChart').getContext('2d');
+        let simulationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Susceptible',
+                        data: [],
+                        borderColor: 'blue',
+                        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    },
+                    {
+                        label: 'Infected',
+                        data: [],
+                        borderColor: 'red',
+                        backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    },
+                    {
+                        label: 'Recovered',
+                        data: [],
+                        borderColor: 'green',
+                        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Agents'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Simulation Step'
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Run simulation when button is clicked
+        document.getElementById('runSimulation').addEventListener('click', function() {
+            // Get parameters from sliders
+            const params = {
+                populationSize: parseInt(document.getElementById('populationSize').value),
+                initialInfected: parseInt(document.getElementById('initialInfected').value),
+                infectionProb: parseFloat(document.getElementById('infectionProb').value),
+                recoveryProb: parseFloat(document.getElementById('recoveryProb').value),
+                contactsPerStep: parseInt(document.getElementById('contactsPerStep').value),
+                steps: parseInt(document.getElementById('steps').value)
+            };
+            
+            // Run simulation
+            const results = runSimulation(params);
+            
+            // Update chart
+            updateChart(results, params.steps);
+        });
+        
+        // Agent-based SIR simulation
+        function runSimulation(params) {
+            // Initialize agents
+            let agents = [];
+            for (let i = 0; i < params.populationSize; i++) {
+                agents.push({
+                    id: i,
+                    state: i < params.initialInfected ? 'I' : 'S' // 'S', 'I', or 'R'
+                });
+            }
+            
+            // Initialize results
+            let results = {
+                Susceptible: [],
+                Infected: [],
+                Recovered: []
+            };
+            
+            // Simulation loop
+            for (let step = 0; step < params.steps; step++) {
+                // Count current states
+                let counts = {
+                    S: 0,
+                    I: 0,
+                    R: 0
+                };
+                
+                // Process each agent
+                for (let agent of agents) {
+                    // Count states
+                    counts[agent.state]++;
+                    
+                    // Infection process
+                    if (agent.state === 'I') {
+                        // Find contacts
+                        let contacts = [];
+                        if (params.contactsPerStep >= agents.length - 1) {
+                            contacts = agents.filter(a => a.id !== agent.id);
+                        } else {
+                            // Random sample without replacement
+                            let potentialContacts = agents.filter(a => a.id !== agent.id && a.state === 'S');
+                            for (let i = 0; i < Math.min(params.contactsPerStep, potentialContacts.length); i++) {
+                                const randomIndex = Math.floor(Math.random() * potentialContacts.length);
+                                contacts.push(potentialContacts[randomIndex]);
+                                potentialContacts.splice(randomIndex, 1);
+                            }
+                        }
+                        
+                        // Try to infect each contact
+                        for (let contact of contacts) {
+                            if (contact.state === 'S' && Math.random() < params.infectionProb) {
+                                contact.state = 'I';
+                            }
+                        }
+                        
+                        // Recovery check
+                        if (Math.random() < params.recoveryProb) {
+                            agent.state = 'R';
+                        }
+                    }
+                }
+                
+                // Record results for this step
+                results.Susceptible.push(counts.S);
+                results.Infected.push(counts.I);
+                results.Recovered.push(counts.R);
+            }
+            
+            return results;
+        }
+        
+        // Update chart with new data
+        function updateChart(results, steps) {
+            // Generate labels for x-axis
+            const labels = Array.from({length: steps}, (_, i) => i);
+            
+            // Update chart data
+            simulationChart.data.labels = labels;
+            simulationChart.data.datasets[0].data = results.Susceptible;
+            simulationChart.data.datasets[1].data = results.Infected;
+            simulationChart.data.datasets[2].data = results.Recovered;
+            
+            // Update chart
+            simulationChart.update();
+        }
+        
+        // Run initial simulation with default parameters
+        document.getElementById('runSimulation').click();
+    </script>
+</body>
+</html>
